@@ -7,10 +7,10 @@ package mosquitto
 #include <stdio.h>
 #include <mosquitto.h>
 
-extern void on_message(void *conn, char* topic, char* payload);
+extern void on_message(void *conn, char* topic, void* payload, int payloadlen);
 
 static void m_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message) {
-  on_message(obj, message->topic, message->payload);
+  on_message(obj, message->topic, message->payload, message->payloadlen);
 }
 
 static void m_log_callback(struct mosquitto *mosq, void *obj, int level, const char *str) {
@@ -34,7 +34,7 @@ import (
 )
 
 //export on_message
-func on_message(conn unsafe.Pointer, topic *C.char, payload *C.char) {
+func on_message(conn unsafe.Pointer, topic *C.char, payload unsafe.Pointer, payloadlen C.int) {
 	c := (*Conn)(conn)
 	for sub, handler := range c.handlers {
 		csub := C.CString(sub)
@@ -43,7 +43,7 @@ func on_message(conn unsafe.Pointer, topic *C.char, payload *C.char) {
 
 		C.mosquitto_topic_matches_sub(csub, topic, &cresult)
 		if cresult {
-			(*handler)(c, &Message{Topic: C.GoString(topic), Payload: C.GoString(payload)})
+			(*handler)(c, &Message{Topic: C.GoString(topic), Payload: C.GoBytes(payload, payloadlen)})
 		}
 	}
 }
@@ -51,7 +51,8 @@ func on_message(conn unsafe.Pointer, topic *C.char, payload *C.char) {
 type HandlerFunc func(*Conn, *Message)
 
 type Message struct {
-	Topic, Payload string
+	Topic   string
+	Payload []byte
 }
 
 type Conn struct {
@@ -116,28 +117,29 @@ func (c *Conn) Close() error {
 }
 
 // TODO: Publish(m *Message)
-// TODO: payload in []byte, message_id, qos, retain
-func (c *Conn) Publish(topic string, payload string) error {
-	ctopic   := C.CString(topic)
-  cpayload := C.CString(payload)
+// TODO: message_id, qos, retain
+func (c *Conn) Publish(topic string, payload []byte) error {
+	ctopic := C.CString(topic)
 	defer C.free(unsafe.Pointer(ctopic))
-  defer C.free(unsafe.Pointer(cpayload))
 
-  result := C.mosquitto_publish(c.mosq, nil, ctopic, C.int(len(payload)), unsafe.Pointer(cpayload), C.int(2), C.bool(false))
-  switch result {
-    case C.MOSQ_ERR_SUCCESS:
-    case C.MOSQ_ERR_INVAL:
-      return errors.New("The input parameters were invalid.")
-    case C.MOSQ_ERR_NOMEM:
-      panic("An out of memory condition occurred.")
-    case C.MOSQ_ERR_NO_CONN:
-      return errors.New("The client isn't connected to a broker.")
-    case C.MOSQ_ERR_PROTOCOL:
-      return errors.New("There is a protocol error communicating with the broker.")
-    case C.MOSQ_ERR_PAYLOAD_SIZE:
-      return errors.New("Payload is too large.")
-  }
-  return nil
+	cpayload := unsafe.Pointer(&payload[0])
+	cpayloadlen := C.int(len(payload))
+
+	result := C.mosquitto_publish(c.mosq, nil, ctopic, cpayloadlen, cpayload, C.int(2), C.bool(false))
+	switch result {
+	case C.MOSQ_ERR_SUCCESS:
+	case C.MOSQ_ERR_INVAL:
+		return errors.New("The input parameters were invalid.")
+	case C.MOSQ_ERR_NOMEM:
+		panic("An out of memory condition occurred.")
+	case C.MOSQ_ERR_NO_CONN:
+		return errors.New("The client isn't connected to a broker.")
+	case C.MOSQ_ERR_PROTOCOL:
+		return errors.New("There is a protocol error communicating with the broker.")
+	case C.MOSQ_ERR_PAYLOAD_SIZE:
+		return errors.New("Payload is too large.")
+	}
+	return nil
 }
 
 // Channels! This just blocks for now.
