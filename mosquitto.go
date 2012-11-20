@@ -31,7 +31,6 @@ import (
 	"net"
 	"strconv"
 	"unsafe"
-	// "fmt"
 )
 
 //export on_message
@@ -44,7 +43,7 @@ func on_message(conn unsafe.Pointer, topic *C.char, payload *C.char) {
 
 		C.mosquitto_topic_matches_sub(csub, topic, &cresult)
 		if cresult {
-			(*handler)(c, &Message{topic: C.GoString(topic), payload: C.GoString(payload)})
+			(*handler)(c, &Message{Topic: C.GoString(topic), Payload: C.GoString(payload)})
 		}
 	}
 }
@@ -52,11 +51,11 @@ func on_message(conn unsafe.Pointer, topic *C.char, payload *C.char) {
 type HandlerFunc func(*Conn, *Message)
 
 type Message struct {
-	topic, payload string
+	Topic, Payload string
 }
 
 type Conn struct {
-	id       string
+	Id       string
 	mosq     *C.struct_mosquitto
 	handlers map[string]*HandlerFunc
 }
@@ -84,7 +83,7 @@ func Dial(id string, address string, clean bool) (Conn, error) {
 	defer C.free(unsafe.Pointer(chost))
 
 	// Setup obj early so mosquitto can pass it around.
-	c := Conn{id: id, handlers: make(map[string]*HandlerFunc)}
+	c := Conn{Id: id, handlers: make(map[string]*HandlerFunc)}
 
 	// TODO: Keepalive.
 	c.mosq = C.mosquitto_new(cid, C.bool(clean), unsafe.Pointer(&c))
@@ -114,6 +113,31 @@ func (c *Conn) HandleFunc(sub string, qos int, handler HandlerFunc) error {
 func (c *Conn) Close() error {
 	C.mosquitto_destroy(c.mosq)
 	return nil
+}
+
+// TODO: Publish(m *Message)
+// TODO: payload in []byte, message_id, qos, retain
+func (c *Conn) Publish(topic string, payload string) error {
+	ctopic   := C.CString(topic)
+  cpayload := C.CString(payload)
+	defer C.free(unsafe.Pointer(ctopic))
+  defer C.free(unsafe.Pointer(cpayload))
+
+  result := C.mosquitto_publish(c.mosq, nil, ctopic, C.int(len(payload)), unsafe.Pointer(cpayload), C.int(2), C.bool(false))
+  switch result {
+    case C.MOSQ_ERR_SUCCESS:
+    case C.MOSQ_ERR_INVAL:
+      return errors.New("The input parameters were invalid.")
+    case C.MOSQ_ERR_NOMEM:
+      panic("An out of memory condition occurred.")
+    case C.MOSQ_ERR_NO_CONN:
+      return errors.New("The client isn't connected to a broker.")
+    case C.MOSQ_ERR_PROTOCOL:
+      return errors.New("There is a protocol error communicating with the broker.")
+    case C.MOSQ_ERR_PAYLOAD_SIZE:
+      return errors.New("Payload is too large.")
+  }
+  return nil
 }
 
 // Channels! This just blocks for now.
