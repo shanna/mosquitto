@@ -12,18 +12,21 @@ func main() {
 		panic(err)
 	}
 
-	err = conn.HandleFunc("foo", 2, func(c *mosquitto.Conn, m *mosquitto.Message) {
-		payload := string(m.Payload)
-		fmt.Printf("foo <- (%s)\nfoo -> bar(%s)\n", payload, payload)
-		if err := c.Publish("bar", m.Payload); err != nil {
+	err = conn.HandleFunc("foo", 2, func(c *mosquitto.Conn, m mosquitto.Message) {
+		fmt.Printf("foo <- (%s)\nfoo -> bar(%s)\n", m.Payload, m.Payload)
+
+		// Change the topic and send it again.
+		m.Topic = "bar"
+		if err := c.Publish(m); err != nil {
 			panic(err)
 		}
 	})
 	if err != nil {
 		panic(err)
 	}
-	conn.HandleFunc("bar", 2, func(c *mosquitto.Conn, m *mosquitto.Message) {
-		fmt.Printf("bar <- (%s)\n", string(m.Payload))
+
+	conn.HandleFunc("bar", 2, func(c *mosquitto.Conn, m mosquitto.Message) {
+		fmt.Printf("bar <- (%s)\n", m.Payload)
 		conn.Close()
 		os.Exit(0)
 	})
@@ -31,8 +34,8 @@ func main() {
 		panic(err)
 	}
 
-	payload := "hello world"
-	fmt.Printf("(%s) -> foo\n", payload)
-	conn.Publish("foo", []byte(payload))
+	message, _ := mosquitto.NewMessage("foo", []byte("hello world"))
+	fmt.Printf("(%s) -> foo\n", message.Payload)
+	conn.Publish(message)
 	conn.Listen()
 }

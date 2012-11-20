@@ -14,11 +14,12 @@ static void m_message_callback(struct mosquitto *mosq, void *obj, const struct m
 }
 
 static void m_log_callback(struct mosquitto *mosq, void *obj, int level, const char *str) {
-  printf("%s\n", str);
+  // XXX: Debugging.
+  // printf("%s\n", str);
 }
 
 static void set_callbacks(struct mosquitto *mosq) {
-  mosquitto_log_callback_set(mosq, m_log_callback); // XXX: Debugging.
+  mosquitto_log_callback_set(mosq, m_log_callback);
   mosquitto_message_callback_set(mosq, m_message_callback);
   // TODO: Other callbacks.
 }
@@ -36,6 +37,13 @@ import (
 //export on_message
 func on_message(conn unsafe.Pointer, topic *C.char, payload unsafe.Pointer, payloadlen C.int) {
 	c := (*Conn)(conn)
+	message, err := NewMessage(C.GoString(topic), C.GoBytes(payload, payloadlen))
+	if err != nil {
+		// TODO: Log error.
+		return
+	}
+
+	// Find handler for message.
 	for sub, handler := range c.handlers {
 		csub := C.CString(sub)
 		cresult := C.bool(false)
@@ -43,16 +51,23 @@ func on_message(conn unsafe.Pointer, topic *C.char, payload unsafe.Pointer, payl
 
 		C.mosquitto_topic_matches_sub(csub, topic, &cresult)
 		if cresult {
-			(*handler)(c, &Message{Topic: C.GoString(topic), Payload: C.GoBytes(payload, payloadlen)})
+			(*handler)(c, message)
 		}
 	}
 }
 
-type HandlerFunc func(*Conn, *Message)
+type HandlerFunc func(*Conn, Message)
 
 type Message struct {
+	Id      int
 	Topic   string
 	Payload []byte
+	Qos     int
+	Retain  bool
+}
+
+func NewMessage(topic string, payload []byte) (Message, error) {
+	return Message{Topic: topic, Payload: payload, Qos: 0, Retain: false}, nil
 }
 
 type Conn struct {
@@ -116,17 +131,16 @@ func (c *Conn) Close() error {
 	return nil
 }
 
-// TODO: Publish(m *Message)
-// TODO: message_id, qos, retain
-func (c *Conn) Publish(topic string, payload []byte) error {
-	ctopic := C.CString(topic)
+// TODO: Message.Id
+func (c *Conn) Publish(m Message) error {
+	ctopic := C.CString(m.Topic)
+	cpayload := unsafe.Pointer(&m.Payload[0])
+	cpayloadlen := C.int(len(m.Payload))
+	cqos := C.int(m.Qos)
+	cretain := C.bool(m.Retain)
 	defer C.free(unsafe.Pointer(ctopic))
 
-	cpayload := unsafe.Pointer(&payload[0])
-	cpayloadlen := C.int(len(payload))
-
-	result := C.mosquitto_publish(c.mosq, nil, ctopic, cpayloadlen, cpayload, C.int(2), C.bool(false))
-	switch result {
+	switch r := C.mosquitto_publish(c.mosq, nil, ctopic, cpayloadlen, cpayload, cqos, cretain); r {
 	case C.MOSQ_ERR_SUCCESS:
 	case C.MOSQ_ERR_INVAL:
 		return errors.New("The input parameters were invalid.")
