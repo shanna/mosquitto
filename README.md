@@ -7,7 +7,6 @@ Mosquitto Go(lang) Client Binding
 
 A Go (cgo) binding for libmosquitto.
 
-
 ## Installation
 
 ### Dependencies
@@ -23,7 +22,7 @@ go get bitbucket.org/shanehanna/mosquitto
 
 ## Usage
 
-See `examples/example.go`
+See [example/example.go](https://bitbucket.org/shanehanna/mosquitto/src/master/example/example.go?at=master)
 
 ## TODO
 
