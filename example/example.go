@@ -3,7 +3,6 @@ package main
 import (
 	"bitbucket.org/shanehanna/mosquitto"
 	"fmt"
-	"os"
 )
 
 func main() {
@@ -27,8 +26,7 @@ func main() {
 
 	conn.HandleFunc("bar", 2, func(c *mosquitto.Conn, m mosquitto.Message) {
 		fmt.Printf("bar <- (%s)\n", m.Payload)
-		conn.Close()
-		os.Exit(0)
+		// c.Close() // Close isn't safe if the Listen() loop is still running at the moment.
 	})
 	if err != nil {
 		panic(err)
@@ -36,6 +34,8 @@ func main() {
 
 	message, _ := mosquitto.NewMessage("foo", []byte("hello world"))
 	fmt.Printf("(%s) -> foo\n", message.Payload)
-	conn.Publish(message)
+	if err = conn.Publish(message); err != nil {
+		panic(err)
+	}
 	conn.Listen()
 }
