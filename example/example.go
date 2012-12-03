@@ -26,7 +26,7 @@ func main() {
 
 	conn.HandleFunc("bar", 2, func(c *mosquitto.Conn, m mosquitto.Message) {
 		fmt.Printf("bar <- (%s)\n", m.Payload)
-		// c.Close() // Close isn't safe if the Listen() loop is still running at the moment.
+		c.Close()
 	})
 	if err != nil {
 		panic(err)

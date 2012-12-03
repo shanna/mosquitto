@@ -16,9 +16,9 @@ static void m_message_callback(struct mosquitto *mosq, void *obj, const struct m
 }
 
 static void m_log_callback(struct mosquitto *mosq, void *obj, int level, const char *str) {
-#ifdef GO_MOSQ_DEBUG
-  printf("%s\n", str);
-#endif
+  if (GO_MOSQ_DEBUG) {
+    printf("%s\n", str);
+  }
 }
 
 static void set_callbacks(struct mosquitto *mosq) {
@@ -45,6 +45,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync"
 	"unsafe"
 )
 
@@ -65,7 +66,11 @@ func on_message(conn unsafe.Pointer, topic *C.char, payload unsafe.Pointer, payl
 
 		C.mosquitto_topic_matches_sub(csub, topic, &cresult)
 		if cresult {
-			(*handler)(c, message)
+			c.wg.Add(1)
+			go func(h *HandlerFunc, c *Conn, m Message) {
+				(*h)(c, m)
+				c.wg.Done()
+			}(handler, c, message)
 		}
 	}
 }
@@ -88,6 +93,8 @@ type Conn struct {
 	Id       string
 	mosq     *C.struct_mosquitto
 	handlers map[string]*HandlerFunc
+	running  bool
+	wg       sync.WaitGroup
 }
 
 func init() {
@@ -147,6 +154,8 @@ func (c *Conn) HandleFunc(sub string, qos int, handler HandlerFunc) error {
 }
 
 func (c *Conn) Close() error {
+	c.running = false
+	c.wg.Wait()
 	C.mosquitto_destroy(c.mosq)
 	return nil
 }
@@ -167,10 +176,9 @@ func (c *Conn) Publish(m Message) error {
 	return code_to_error(C.mosquitto_publish2(c.mosq, nil, ctopic, cpayloadlen, cpayload, cqos, cretain))
 }
 
-// Channels! This just blocks for now.
 func (c *Conn) Listen() {
-	// TODO: Timeout.
-	for {
+	c.running = true
+	for c.running {
 		if err := code_to_error(C.mosquitto_loop(c.mosq, C.int(-1), C.int(1))); err != nil {
 			fmt.Printf("error: %s\n", err)
 			break

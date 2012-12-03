@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/bmizerany/assert"
 	"testing"
+  "os"
 )
 
 func TestMosquitto(t *testing.T) {
@@ -14,7 +15,7 @@ func TestMosquitto(t *testing.T) {
 
 	// Subscribe.
 	err = conn.HandleFunc("foo", 2, func(c *Conn, m Message) {
-		fmt.Printf("message: %+v\n", m)
+		fmt.Fprintf(os.Stderr, "message: %+v\n", m)
 		// TODO: Test we actually got a message here.
 		c.Close() // We are done.
 	})
