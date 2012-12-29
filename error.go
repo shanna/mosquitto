@@ -1,11 +1,10 @@
 package mosquitto
 
 type Error struct {
-  Code    int
-  Message string
+	Code    int
+	Message string
 }
 
 func (e Error) Error() string {
-  return e.Message
+	return e.Message
 }
-

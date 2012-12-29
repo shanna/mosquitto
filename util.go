@@ -7,8 +7,8 @@ package mosquitto
 import "C"
 
 import (
-  "fmt"
-  "unsafe"
+	"fmt"
+	"unsafe"
 )
 
 func bool_to_cint(b bool) C.int {
@@ -35,13 +35,12 @@ func ccode_to_error(code C.int) error {
 	case C.MOSQ_ERR_PROTOCOL:
 		return Error{(int)(code), "There is a protocol error communicating with the broker."}
 	case C.MOSQ_ERR_ERRNO:
-    cerr := C.CString("") // TODO: Is this safe?
-    defer C.free(unsafe.Pointer(cerr))
-    C.mosquitto_error(cerr)
-    return Error{(int)(code), C.GoString(cerr)}
+		cerr := C.CString("") // TODO: Is this safe?
+		defer C.free(unsafe.Pointer(cerr))
+		C.mosquitto_error(cerr)
+		return Error{(int)(code), C.GoString(cerr)}
 	case C.MOSQ_ERR_PAYLOAD_SIZE:
 		return Error{(int)(code), "Payload is too large."}
 	}
 	return nil
 }
-

@@ -11,4 +11,3 @@ type Message struct {
 func NewMessage(topic string, payload []byte) (Message, error) {
 	return Message{0, topic, payload, 0, false}, nil
 }
-
