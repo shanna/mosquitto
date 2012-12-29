@@ -12,7 +12,7 @@ A Go (cgo) binding for libmosquitto.
 ### Dependencies
 
 * Go >= 1.0
-* libmosquitto >= 1.0.5
+* libmosquitto >= 1.1
 
 ### Install
 
@@ -27,6 +27,9 @@ See [example/example.go](https://bitbucket.org/shanehanna/mosquitto/src/master/e
 ## TODO
 
 * Doesn't expose all of libmosquitto, just what I've needed so far.
+* Username/Password.
+* TLS.
+* You should only be able to Listen() once per object.
 
 ## Contributing
 

@@ -1,25 +1,31 @@
 package mosquitto
 
 import (
-	"fmt"
 	"github.com/bmizerany/assert"
 	"testing"
-  "os"
+  "time"
 )
 
 func TestMosquitto(t *testing.T) {
 	// Connect.
 	conn, err := Dial("tests", "localhost:1883", true)
-	assert.Equal(t, nil, err)
+  if err != nil {
+    t.Logf("Dial Error: %s\n", err.Error())
+  }
 	defer conn.Close()
 
+  // Listen.
+	go conn.Listen()
+
 	// Subscribe.
+  result := make(chan string, 1)
 	err = conn.HandleFunc("foo", 2, func(c *Conn, m Message) {
-		fmt.Fprintf(os.Stderr, "message: %+v\n", m)
-		// TODO: Test we actually got a message here.
-		c.Close() // We are done.
+    result <- string(m.Payload)
 	})
 	assert.Equal(t, nil, err)
+	
+  // Give listener/handler a little time to spin up.
+  time.Sleep(1 * time.Second)
 
 	// Message.
 	message, err := NewMessage("foo", []byte("hello world"))
@@ -29,6 +35,5 @@ func TestMosquitto(t *testing.T) {
 	err = conn.Publish(message)
 	assert.Equal(t, nil, err)
 
-	// Listen.
-	// conn.Listen()
+  assert.Equal(t, "hello world", <-result)
 }
